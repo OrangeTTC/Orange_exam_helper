@@ -1,4 +1,5 @@
 // Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
+#include "orange/chapter_catalog.hpp"
 #include "orange/repository.hpp"
 #include "orange/study_timer.hpp"
 #include <QFile>
@@ -23,6 +24,26 @@ class CoreTests : public QObject {
         return q;
     }
   private slots:
+    void textbookChapterCatalog() {
+        const auto& chapters = mathChapters();
+        QCOMPARE(chapters.size(), 37);
+        QSet<QString> labels;
+        QMap<QString, int> sizes;
+        QMap<QString, int> lastPage;
+        for (const auto& chapter : chapters) {
+            QVERIFY(!labels.contains(chapter.label()));
+            labels.insert(chapter.label());
+            QVERIFY(chapter.page > lastPage.value(chapter.group));
+            lastPage[chapter.group] = chapter.page;
+            ++sizes[chapter.group];
+        }
+        QCOMPARE(sizes.value("高等数学"), 24);
+        QCOMPARE(sizes.value("线性代数"), 7);
+        QCOMPARE(sizes.value("概率论与数理统计"), 6);
+        QVERIFY(chapters.at(9).heading.startsWith("第10讲 "));
+        QVERIFY(chapters.at(24).heading.startsWith("第0讲 "));
+        QCOMPARE(chapters.last().label(), QString("概率论与数理统计 · 第6讲 数理统计"));
+    }
     void persistenceAndIndexes() {
         try {
             QTemporaryDir dir;

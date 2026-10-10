@@ -17,7 +17,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 & ctest --test-dir $buildPath --output-on-failure
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 if ($Package) {
-    $releasePath = if ($PackageDir) { [System.IO.Path]::GetFullPath($PackageDir) } else { Join-Path $projectRoot 'release\OrangeStudy' }
+    $projectDefinition = Get-Content -LiteralPath (Join-Path $projectRoot 'CMakeLists.txt') -Raw
+    if ($projectDefinition -notmatch 'project\(OrangeStudy VERSION ([0-9]+\.[0-9]+\.[0-9]+)') { throw 'Project version not found.' }
+    $releaseVersion = $Matches[1]
+    $releasePath = if ($PackageDir) { [System.IO.Path]::GetFullPath($PackageDir) } else { Join-Path $projectRoot "release\OrangeStudy-$releaseVersion" }
     New-Item -ItemType Directory -Force $releasePath | Out-Null
     Copy-Item -LiteralPath (Join-Path $buildPath 'OrangeStudy.exe'), (Join-Path $buildPath 'orange-cli.exe') -Destination $releasePath
     & (Join-Path $QtPrefix 'bin\windeployqt.exe') --release --no-translations --no-opengl-sw (Join-Path $releasePath 'OrangeStudy.exe')

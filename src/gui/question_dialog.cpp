@@ -1,5 +1,6 @@
 // Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
 #include "orange/question_dialog.hpp"
+#include "orange/chapter_picker.hpp"
 #include "orange/math_browser.hpp"
 #include "orange/reading_preferences.hpp"
 #include <QComboBox>
@@ -44,9 +45,21 @@ QuestionDialog::QuestionDialog(const Question& q, QWidget* parent) : QDialog(par
     title_->setObjectName("editTitle");
     title_->setMaxLength(240);
     title_->setPlaceholderText("给题目起一个便于找回的标题");
-    chapter_ = new QLineEdit(q.chapter);
+    chapter_ = new QComboBox;
     chapter_->setObjectName("editChapter");
-    chapter_->setPlaceholderText("按您的教材章节填写，未知时填待标注");
+    chapter_->setEditable(true);
+    chapter_->setInsertPolicy(QComboBox::NoInsert);
+    chapter_->lineEdit()->setPlaceholderText("选择目录章节，或填写自定义章节；未知时填待标注");
+    const auto reloadChapters = [this](const QString& selected) {
+        populateChapters(chapter_, subject_->currentData() == "mathematics", {selected}, "待标注",
+                         "待标注");
+        chapter_->setCurrentText(selected);
+    };
+    reloadChapters(q.chapter);
+    connect(subject_, &QComboBox::currentIndexChanged, this, [this, reloadChapters] {
+        // 学科切换保留用户已输入的标签，不暗中重分类。
+        reloadChapters(chapter_->currentText());
+    });
     source_ = new QLineEdit(q.source);
     source_->setObjectName("editSource");
     source_->setPlaceholderText("例如：个人提问 / 教材页码 / 某年真题");
@@ -140,7 +153,7 @@ Question QuestionDialog::question() const {
     q.subject = subject_->currentData().toString();
     q.title = title_->text().trimmed();
     q.difficulty = difficulty_->currentData().toInt();
-    q.chapter = chapter_->text().trimmed();
+    q.chapter = chapter_->currentText().trimmed();
     q.source = source_->text().trimmed();
     q.status = status_->currentData().toString();
     q.content = content_->toPlainText();

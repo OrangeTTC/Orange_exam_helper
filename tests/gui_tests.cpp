@@ -1,6 +1,8 @@
 // Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
+#include "orange/chapter_catalog.hpp"
 #include "orange/main_window.hpp"
 #include "orange/math_browser.hpp"
+#include "orange/question_dialog.hpp"
 #include "orange/reading_preferences.hpp"
 #include <QComboBox>
 #include <QDialog>
@@ -15,6 +17,7 @@
 #include <QTextBrowser>
 #include <QTextEdit>
 #include <QTimer>
+#include <QTreeWidget>
 #include <QtTest>
 
 using namespace orange;
@@ -27,6 +30,68 @@ class GuiTests : public QObject {
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory_.path());
         QCoreApplication::setOrganizationName("OrangeTests");
+    }
+    void chapterDirectoryAndEditor() {
+        QTemporaryDir dir;
+        Repository repo(dir.path());
+        Question q;
+        q.subject = "mathematics";
+        q.title = "目录检索测试";
+        q.content = "求矩阵的秩";
+        q.chapter = mathChapters().at(26).label();
+        const auto saved = repo.add(q);
+        q.chapter = "旧章节标签";
+        repo.add(q);
+        q.chapter = mathChapters().last().label();
+        repo.add(q);
+        QuestionDialog editor(saved);
+        auto* combo = editor.findChild<QComboBox*>("editChapter");
+        QVERIFY(combo);
+        QCOMPARE(combo->currentText(), saved.chapter);
+        QVERIFY(combo->findData(mathChapters().first().label()) > 0);
+        combo->setCurrentText("自定义知识点");
+        auto* subject = editor.findChild<QComboBox*>("editSubject");
+        subject->setCurrentIndex(subject->findData("professional"));
+        QCOMPARE(editor.question().chapter, QString("自定义知识点"));
+        QCOMPARE(combo->findData(mathChapters().first().label()), -1);
+        subject->setCurrentIndex(subject->findData("mathematics"));
+        combo->setCurrentIndex(combo->findData(mathChapters().last().label()));
+        QCOMPARE(editor.question().chapter, mathChapters().last().label());
+
+        MainWindow window(repo);
+        window.show();
+        QTimer::singleShot(50, &window, [&window, saved] {
+            auto* dialog = window.findChild<QDialog*>("chapterCatalogDialog");
+            QVERIFY(dialog);
+            auto* tree = dialog->findChild<QTreeWidget*>("chapterTree");
+            QCOMPARE(tree->topLevelItemCount(), 4);
+            QCOMPARE(tree->topLevelItem(0)->childCount(), 24);
+            QCOMPARE(tree->topLevelItem(1)->childCount(), 7);
+            QCOMPARE(tree->topLevelItem(2)->childCount(), 6);
+            auto* matrix = tree->topLevelItem(1)->child(2);
+            QCOMPARE(matrix->data(0, Qt::UserRole).toString(), saved.chapter);
+            QCOMPARE(matrix->text(2), QString("1"));
+            tree->setCurrentItem(tree->topLevelItem(1));
+            QVERIFY(!dialog->findChild<QPushButton*>("viewChapter")->isEnabled());
+            tree->setCurrentItem(matrix);
+            const auto screenshotDir = qEnvironmentVariable("ORANGE_SCREENSHOT_DIR");
+            if (!screenshotDir.isEmpty())
+                QVERIFY(dialog->grab().save(screenshotDir + "/chapters.png"));
+            QTest::mouseClick(dialog->findChild<QPushButton*>("viewChapter"), Qt::LeftButton);
+        });
+        QTest::mouseClick(window.findChild<QPushButton*>("chapterCatalog"), Qt::LeftButton);
+        auto* filter = window.findChild<QComboBox*>("filterChapter");
+        QCOMPARE(filter->currentData().toString(), saved.chapter);
+        QCOMPARE(window.findChild<QTableWidget*>("questions")->rowCount(), 1);
+        QCOMPARE(window.findChild<QLineEdit*>("search")->text(), QString());
+        // 空章节可检索，目录保留零题章节；浏览不修改历史。
+        filter->setCurrentIndex(filter->findData(mathChapters().first().label()));
+        QCOMPARE(window.findChild<QTableWidget*>("questions")->rowCount(), 0);
+        filter->setCurrentIndex(filter->findData("旧章节标签"));
+        QCOMPARE(window.findChild<QTableWidget*>("questions")->rowCount(), 1);
+        QCOMPARE(repo.history(saved.id).size(), 1);
+        QCOMPARE(repo.find(saved.id)->updatedAt, saved.updatedAt);
+        QCOMPARE(repo.list().size(), 3);
     }
     void addFilterEditAndTimer() {
         QTemporaryDir dir;
@@ -49,7 +114,7 @@ class GuiTests : public QObject {
             dialog->findChild<QTextEdit*>("editContent")
                 ->setPlainText("<script>不会执行</script>\n中文题干 $\\frac{1}{2}$");
             dialog->findChild<QTextEdit*>("editConversation")->setPlainText("历史追问：需要复习");
-            dialog->findChild<QLineEdit*>("editChapter")->setText("自定义章节");
+            dialog->findChild<QComboBox*>("editChapter")->setCurrentText("自定义章节");
             dialog->findChild<QComboBox*>("editDifficulty")->setCurrentIndex(3);
             QTest::qWait(350);
             auto* preview =

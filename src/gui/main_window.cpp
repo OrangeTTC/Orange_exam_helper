@@ -1,5 +1,7 @@
 // Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
 #include "orange/main_window.hpp"
+#include "orange/chapter_catalog.hpp"
+#include "orange/chapter_picker.hpp"
 #include "orange/math_browser.hpp"
 #include "orange/question_dialog.hpp"
 #include "orange/reading_preferences.hpp"
@@ -25,6 +27,7 @@
 #include <QTableWidget>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 
 namespace orange {
@@ -160,8 +163,9 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
     connect(about, &QPushButton::clicked, this, [this] {
         QMessageBox::information(
             this, "Orange 考研助手",
-            "作者：Orange\n版本：1.2.0\n项目许可：Apache License 2.0\n\n"
-            "考试配置：数学（一）、电子科技大学 839。\n章节标签按个人教材填写。\n\n题库位置：\n" +
+            "作者：Orange\n版本：1.3.0\n项目许可：Apache License 2.0\n\n"
+            "考试配置：数学（一）、电子科技大学 "
+            "839。\n数学目录按用户教材划分，其他学科章节自由填写。\n\n题库位置：\n" +
                 repository_.databasePath() +
                 "\n\n使用“导出备份”保存题目、编辑历史和学习计时。\n未来在本项目中明确要求记录错题，"
                 "可通过配套 CLI 录入。\n"
@@ -222,6 +226,9 @@ QWidget* MainWindow::libraryPage() {
     filters->addWidget(chapter_, 1);
     filters->addWidget(source_, 1);
     filters->addWidget(status_);
+    auto* catalog = button("数学章节目录", "chapterCatalog");
+    filters->addWidget(catalog);
+    connect(catalog, &QPushButton::clicked, this, &MainWindow::showChapterCatalog);
     auto* reset = button("清除筛选");
     filters->addWidget(reset);
     layout->addLayout(filters);
@@ -230,6 +237,9 @@ QWidget* MainWindow::libraryPage() {
     layout->addWidget(resultCount_);
     auto* split = new QSplitter;
     questions_ = table({"题目", "难度", "章节", "来源", "状态"});
+    // 长章节名称在提示中完整显示，避免目录名挤占题目阅读区域。
+    questions_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Interactive);
+    questions_->setColumnWidth(2, 220);
     questions_->setObjectName("questions");
     questions_->setMinimumWidth(470);
     split->addWidget(questions_);
@@ -421,13 +431,103 @@ void MainWindow::reloadTags() {
                                  std::make_pair(source_, QString("source"))}) {
             const QSignalBlocker blocker(item.first);
             const auto selected = item.first->currentData();
-            item.first->clear();
-            item.first->addItem(item.second == "chapter" ? "所有章节" : "所有来源", "");
-            for (const auto& tag : repository_.tags(item.second, currentSubject_))
-                item.first->addItem(tag, tag);
+            const auto tags = repository_.tags(item.second, currentSubject_);
+            if (item.second == "chapter")
+                populateChapters(item.first,
+                                 currentSubject_.isEmpty() || currentSubject_ == "mathematics",
+                                 tags, "所有章节", "");
+            else {
+                item.first->clear();
+                item.first->addItem("所有来源", "");
+                for (const auto& tag : tags)
+                    item.first->addItem(tag, tag);
+            }
             const int index = item.first->findData(selected);
             item.first->setCurrentIndex(index < 0 ? 0 : index);
         }
+    });
+}
+void MainWindow::showChapterCatalog() {
+    guarded([this] {
+        QDialog dialog(this);
+        dialog.setObjectName("chapterCatalogDialog");
+        dialog.setWindowTitle("数学（一） · 教材章节目录");
+        dialog.resize(1000, 780);
+        auto* layout = new QVBoxLayout(&dialog);
+        auto* hint = new QLabel("目录依据您提供的三张教材照片。选择具体章节后点击“查看题目”，或双击"
+                                "章节。数量包含该章节全部数学错题。");
+        hint->setWordWrap(true);
+        layout->addWidget(hint);
+        auto* tree = new QTreeWidget;
+        tree->setObjectName("chapterTree");
+        tree->setHeaderLabels({"板块 / 讲次 / 章节", "教材页码", "错题数"});
+        tree->setColumnWidth(0, 710);
+        tree->setColumnWidth(1, 100);
+        Filter math;
+        math.subject = "mathematics";
+        QMap<QString, int> counts;
+        for (const auto& q : repository_.list(math))
+            ++counts[q.chapter];
+        QTreeWidgetItem* group = nullptr;
+        QString previous;
+        for (const auto& entry : mathChapters()) {
+            if (entry.group != previous) {
+                previous = entry.group;
+                group = new QTreeWidgetItem(tree, {entry.group, "", "0"});
+                auto font = group->font(0);
+                font.setBold(true);
+                group->setFont(0, font);
+            }
+            const int count = counts.take(entry.label());
+            auto* item = new QTreeWidgetItem(
+                group, {entry.heading, QString::number(entry.page), QString::number(count)});
+            item->setData(0, Qt::UserRole, entry.label());
+            item->setToolTip(0, entry.label());
+            group->setText(2, QString::number(group->text(2).toInt() + count));
+        }
+        if (!counts.isEmpty()) {
+            auto* custom = new QTreeWidgetItem(tree, {"其他 / 待标注 / 自定义章节", "", "0"});
+            int total = 0;
+            for (auto it = counts.cbegin(); it != counts.cend(); ++it) {
+                auto* item =
+                    new QTreeWidgetItem(custom, {it.key(), "—", QString::number(it.value())});
+                item->setData(0, Qt::UserRole, it.key());
+                total += it.value();
+            }
+            custom->setText(2, QString::number(total));
+        }
+        tree->expandAll();
+        layout->addWidget(tree, 1);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+        auto* view = buttons->addButton("查看题目", QDialogButtonBox::AcceptRole);
+        view->setObjectName("viewChapter");
+        view->setEnabled(false);
+        connect(tree, &QTreeWidget::itemSelectionChanged, &dialog, [tree, view] {
+            const auto* item = tree->currentItem();
+            view->setEnabled(item && item->data(0, Qt::UserRole).isValid());
+        });
+        const auto select = [this, tree, &dialog] {
+            const auto* item = tree->currentItem();
+            if (!item || !item->data(0, Qt::UserRole).isValid())
+                return;
+            const auto chapter = item->data(0, Qt::UserRole);
+            // 打开目录章节时清除其他筛选，确保数量与目录一致；此操作不写入题库。
+            navigation_->setCurrentRow(subjects().indexOf("mathematics"));
+            reloadTags();
+            QSignalBlocker a(difficulty_), b(chapter_), c(source_), d(status_), e(search_);
+            difficulty_->setCurrentIndex(0);
+            source_->setCurrentIndex(0);
+            status_->setCurrentIndex(0);
+            search_->clear();
+            chapter_->setCurrentIndex(chapter_->findData(chapter));
+            refresh();
+            dialog.accept();
+        };
+        connect(view, &QPushButton::clicked, &dialog, select);
+        connect(tree, &QTreeWidget::itemDoubleClicked, &dialog, [select] { select(); });
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        layout->addWidget(buttons);
+        dialog.exec();
     });
 }
 QString MainWindow::selectedId() const {

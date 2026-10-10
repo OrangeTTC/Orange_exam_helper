@@ -30,6 +30,7 @@ class MainWindow : public QMainWindow {
     QWidget* timerPage();
     void guarded(const std::function<void()>& action);
     void reloadTags();
+    void showChapterCatalog();
     Filter filter() const;
     QString selectedId() const;
     void showSelected();

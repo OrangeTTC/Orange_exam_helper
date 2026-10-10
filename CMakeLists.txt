@@ -1,6 +1,6 @@
 # Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.21)
-project(OrangeStudy VERSION 1.2.0 LANGUAGES CXX)
+project(OrangeStudy VERSION 1.3.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -11,11 +11,12 @@ target_include_directories(orange_tinyxml2 SYSTEM PUBLIC third_party/tinyxml2)
 set_target_properties(orange_tinyxml2 PROPERTIES AUTOMOC OFF)
 add_subdirectory(third_party/MicroTeX)
 
-add_library(orange_core src/core/model.cpp src/core/repository.cpp src/core/study_timer.cpp)
+add_library(orange_core src/core/model.cpp src/core/repository.cpp src/core/study_timer.cpp
+    src/core/chapter_catalog.cpp)
 target_include_directories(orange_core PUBLIC include)
 target_link_libraries(orange_core PUBLIC Qt6::Core Qt6::Sql)
 add_library(orange_gui src/gui/main_window.cpp src/gui/question_dialog.cpp src/gui/math_browser.cpp
-    src/gui/reading_preferences.cpp include/orange/reading_preferences.hpp)
+    src/gui/reading_preferences.cpp src/gui/chapter_picker.cpp include/orange/reading_preferences.hpp)
 target_link_libraries(orange_gui PUBLIC orange_core Qt6::Widgets PRIVATE orange_microtex)
 add_executable(OrangeStudy WIN32 src/gui/main.cpp)
 target_link_libraries(OrangeStudy PRIVATE orange_gui)

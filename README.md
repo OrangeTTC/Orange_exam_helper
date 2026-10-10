@@ -6,7 +6,7 @@ Git 仓库提供源码、测试与构建脚本。个人题库、本机工具链�
 
 ## 使用
 
-在本项目中双击根目录 **Start.cmd** 启动已编译的 Windows 版（1.2.0）；所有题目、问答和计时保存在项目根目录 `data/orange-study.sqlite3`。如果只复制 `release/OrangeStudy`，双击其中的 Start.cmd，便携版会在自己的 `data` 目录保存题库。两种启动方式数据目录不同，迁移时可使用 JSON 备份。
+在本项目中双击根目录 **Start.cmd** 启动已编译的 Windows 版（1.3.0）；所有题目、问答和计时保存在项目根目录 `data/orange-study.sqlite3`。如果只复制 `release/OrangeStudy-1.3.0`，双击其中的 Start.cmd，便携版会在自己的 `data` 目录保存题库。两种启动方式数据目录不同，迁移时可使用 JSON 备份。
 
 1. 左侧选择专业课、数学（一）、英语或政治。默认进入**电子科技大学 839 专业课**。
 2. 点击“加入错题”，填写题目、难度、章节、来源，可追加解析、错因和历史问答。
@@ -15,7 +15,7 @@ Git 仓库提供源码、测试与构建脚本。个人题库、本机工具链�
 5. “学习计时”支持正计时、1–600 分钟倒计时、暂停/继续及结束保存。可关联选中题目，关联关系和学科在开始时固定。
 6. “导出备份”保存全部题目、编辑历史、计时；“导入”还原 JSON。相同 UUID 的相同记录跳过，冲突记录会导致整个导入回滚，不静默覆盖。
 
-章节为自由标签。839 的院校及编号按用户指定配置，软件未内置未经确认的考试大纲或教材章节。英语未假设为英语（一）或英语（二）。难度从 1 入门到 5 挑战，可在编辑中调整。当前版本不支持图片附件或 OCR。
+数学（一）按用户提供的教材目录分为高等数学、线性代数、概率论与数理统计，共 37 项。点击“数学章节目录”查看各章题数并进入章节；录入窗口可选择章节。完整目录与标准标签见 [数学教材章节目录](docs/math-chapters.md)。其他学科与旧章节保留自定义标签。839 的院校及编号按用户指定配置，软件未内置未经确认的考试大纲或教材章节。英语未假设为英语（一）或英语（二）。难度从 1 入门到 5 挑战，可在编辑中调整。当前版本不支持图片附件或 OCR。
 
 ### 数学公式
 
@@ -54,12 +54,12 @@ GUI 点击“刷新”即可看到命令行新增记录。
 
 ```powershell
 # 根目录 Start.cmd 与这些 CLI 命令共用 data。
-& '.\release\OrangeStudy\orange-cli.exe' --data-dir '.\data' list --subject professional --chapter '待标注' --difficulty 3
-& '.\release\OrangeStudy\orange-cli.exe' --data-dir '.\data' list --source '个人提问' --search '关键词'
-& '.\release\OrangeStudy\orange-cli.exe' --data-dir '.\data' show '<题目 UUID>'
-& '.\release\OrangeStudy\orange-cli.exe' --data-dir '.\data' history '<题目 UUID>'
-& '.\release\OrangeStudy\orange-cli.exe' --data-dir '.\data' export 'backup.json'
-& '.\release\OrangeStudy\orange-cli.exe' --data-dir '.\data' stats
+& '.\release\OrangeStudy-1.3.0\orange-cli.exe' --data-dir '.\data' list --subject professional --chapter '待标注' --difficulty 3
+& '.\release\OrangeStudy-1.3.0\orange-cli.exe' --data-dir '.\data' list --source '个人提问' --search '关键词'
+& '.\release\OrangeStudy-1.3.0\orange-cli.exe' --data-dir '.\data' show '<题目 UUID>'
+& '.\release\OrangeStudy-1.3.0\orange-cli.exe' --data-dir '.\data' history '<题目 UUID>'
+& '.\release\OrangeStudy-1.3.0\orange-cli.exe' --data-dir '.\data' export 'backup.json'
+& '.\release\OrangeStudy-1.3.0\orange-cli.exe' --data-dir '.\data' stats
 ```
 
 `update 文件.json` 接受含 `id` 的部分字段对象，例如 `{"id":"…","notes":"新的错因"}`。追加问答时先 show 读取原 conversation，再合并追加。可携带原 `updated_at` 防止覆盖并发编辑。CLI 所有输出为 UTF-8，错误时返回非零退出码。
@@ -84,7 +84,7 @@ ctest --test-dir build --output-on-failure
 ./build/orange-cli --data-dir ./data list
 ```
 
-Windows 用 windeployqt 打包运行依赖；macOS 可用 macdeployqt，Linux 需安装对应 Qt 运行库及 SQLite 驱动。源代码面向 Windows/macOS/Linux；当前交付构建与运行验证在 Windows，其他平台尚未实机验证。
+Windows 打包默认输出到 `release/OrangeStudy-1.3.0`，也可用 `-PackageDir` 指定路径；根目录启动器使用上述默认路径。Windows 用 windeployqt 打包运行依赖；macOS 可用 macdeployqt，Linux 需安装对应 Qt 运行库及 SQLite 驱动。源代码面向 Windows/macOS/Linux；当前交付构建与运行验证在 Windows，其他平台尚未实机验证。
 
 没有传入 `--data-dir` 时，GUI 与 CLI 使用同一个 `QStandardPaths::AppDataLocation`，可在“关于 / 数据位置”确认路径。测试全部使用临时目录，不向真实题库写示例。
 
@@ -98,7 +98,7 @@ src/cli/          供后续问答录入与维护的命令行工具
 tests/            持久化、索引、备份、计时、GUI 流程与公式渲染测试
 third_party/      固定版本的本地数学渲染器、XML 解析库及许可文本
 scripts/          Windows 编译打包与录入脚本
-docs/             数据格式说明
+docs/             数据格式与数学教材章节目录
 data/             根目录启动器使用的本地题库（不纳入版本控制）
 ```
 

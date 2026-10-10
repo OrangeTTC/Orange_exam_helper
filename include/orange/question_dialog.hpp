@@ -14,8 +14,8 @@ class QuestionDialog : public QDialog {
 
   private:
     Question original_;
-    QComboBox *subject_, *difficulty_, *status_;
-    QLineEdit *title_, *chapter_, *source_;
+    QComboBox *subject_, *difficulty_, *status_, *chapter_;
+    QLineEdit *title_, *source_;
     QTextEdit *content_, *answer_, *notes_, *conversation_;
     MathBrowser* preview_;
 };
