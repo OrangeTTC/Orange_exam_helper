@@ -97,6 +97,37 @@ class CoreTests : public QObject {
             QFAIL(e.what());
         }
     }
+    void chapterCollectionFilters() {
+        QTemporaryDir dir;
+        Repository repo(dir.path());
+        auto q = example("mathematics");
+        q.chapter = "章节'一";
+        repo.add(q);
+        q.chapter = "章节二";
+        q.difficulty = 4;
+        q.source = "真题";
+        repo.add(q);
+        q.chapter = "章节三";
+        repo.add(q);
+        q.subject = "professional";
+        q.chapter = "章节二";
+        repo.add(q);
+        Filter f;
+        f.subject = "mathematics";
+        f.chapters = {"章节'一", "章节二"};
+        QCOMPARE(repo.list(f).size(), 2);
+        f.source = "真题";
+        f.difficulty = 4;
+        QCOMPARE(repo.list(f).size(), 1);
+        f.chapter = "章节三";
+        QCOMPARE(repo.list(f).size(), 0);
+        f.chapter.clear();
+        f.chapters = {"' OR 1=1 --"};
+        QCOMPARE(repo.list(f).size(), 0);
+        f.chapters = {""};
+        QCOMPARE(repo.list(f).size(), 0);
+        QCOMPARE(repo.list().size(), 4);
+    }
     void revisionAndConcurrentUpdate() {
         QTemporaryDir dir;
         Repository repo(dir.path());

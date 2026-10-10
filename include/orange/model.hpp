@@ -35,6 +35,7 @@ struct Filter {
     QString source;
     QString status;
     QString keyword;
+    QStringList chapters; // 目录汇总使用精确章节集合；空集合表示不限，不保存到题库。
 };
 struct Session {
     QString id;

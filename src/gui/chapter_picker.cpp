@@ -8,17 +8,20 @@
 
 namespace orange {
 void populateChapters(QComboBox* combo, bool includeMath, const QStringList& extraTags,
-                      const QString& firstText, const QString& firstValue) {
+                      const QString& firstText, const QString& firstValue, bool selectGroups) {
     const QSignalBlocker blocker(combo);
     combo->clear();
     combo->addItem(firstText, firstValue);
     QSet<QString> included{firstValue};
-    const auto header = [combo](const QString& text) {
-        combo->addItem(text);
+    const auto header = [combo, selectGroups](const QString& text, const QString& group) {
+        // 使用结构化筛选值，避免与同名的自定义章节标签混淆。
+        combo->addItem(text, selectGroups ? QVariant(QVariantMap{{"math_group", group}})
+                                         : QVariant());
         auto* model = qobject_cast<QStandardItemModel*>(combo->model());
         if (model) {
             auto* item = model->item(combo->count() - 1);
-            item->setFlags(Qt::NoItemFlags);
+            if (!selectGroups)
+                item->setFlags(Qt::NoItemFlags);
             auto font = item->font();
             font.setBold(true);
             item->setFont(font);
@@ -29,7 +32,7 @@ void populateChapters(QComboBox* combo, bool includeMath, const QStringList& ext
         for (const auto& entry : mathChapters()) {
             if (entry.group != group) {
                 group = entry.group;
-                header(group);
+                header(group, group);
             }
             combo->addItem(entry.label(), entry.label());
             combo->setItemData(combo->count() - 1,
@@ -43,7 +46,7 @@ void populateChapters(QComboBox* combo, bool includeMath, const QStringList& ext
         if (tag.isEmpty() || included.contains(tag))
             continue;
         if (includeMath && !customHeader) {
-            header("其他 / 自定义章节");
+            header("其他 / 自定义章节", "other");
             customHeader = true;
         }
         combo->addItem(tag, tag);

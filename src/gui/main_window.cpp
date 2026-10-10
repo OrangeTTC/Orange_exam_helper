@@ -28,6 +28,7 @@
 #include <QTextBrowser>
 #include <QTimer>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
 
 namespace orange {
@@ -163,7 +164,7 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
     connect(about, &QPushButton::clicked, this, [this] {
         QMessageBox::information(
             this, "Orange 考研助手",
-            "作者：Orange\n版本：1.3.0\n项目许可：Apache License 2.0\n\n"
+            "作者：Orange\n版本：1.3.4\n项目许可：Apache License 2.0\n\n"
             "考试配置：数学（一）、电子科技大学 "
             "839。\n数学目录按用户教材划分，其他学科章节自由填写。\n\n题库位置：\n" +
                 repository_.databasePath() +
@@ -219,6 +220,7 @@ QWidget* MainWindow::libraryPage() {
     source_->setObjectName("filterSource");
     source_->setMinimumWidth(160);
     status_ = new QComboBox;
+    status_->setObjectName("filterStatus");
     status_->addItem("所有状态", "");
     for (const auto& s : QStringList{"pending", "reviewing", "mastered"})
         status_->addItem(statusLabel(s), s);
@@ -254,10 +256,12 @@ QWidget* MainWindow::libraryPage() {
     auto* actions = new QHBoxLayout;
     edit_ = button("编辑", "editQuestion");
     read_ = button("放大阅读", "readQuestion");
+    reviewing_ = button("标记复习中", "markReviewing");
     mastered_ = button("标记已掌握", "markMastered");
     history_ = button("编辑历史");
     actions->addWidget(edit_);
     actions->addWidget(read_);
+    actions->addWidget(reviewing_);
     actions->addWidget(mastered_);
     actions->addWidget(history_);
     rightLayout->addLayout(actions);
@@ -277,27 +281,48 @@ QWidget* MainWindow::libraryPage() {
             dialog.setWindowTitle(q->title);
             dialog.resize(1000, 800);
             auto* layout = new QVBoxLayout(&dialog);
-            layout->addWidget(createReadingToolbar());
+            auto* readingHeader = new QHBoxLayout;
+            readingHeader->addWidget(createReadingToolbar(), 1);
+            // 全屏没有系统标题栏，关闭入口固定在正文滚动区域之外。
+            auto* closeReading = button("关闭阅读", "closeReading");
+            closeReading->setToolTip("返回题库（Esc）");
+            readingHeader->addWidget(closeReading);
+            connect(closeReading, &QPushButton::clicked, &dialog, &QDialog::reject);
+            layout->addLayout(readingHeader);
             auto* browser = new MathBrowser;
             browser->setObjectName("readingContent");
             layout->addWidget(browser);
             browser->showQuestion(*q);
             auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+            buttons->button(QDialogButtonBox::Close)->setText("关闭");
+            buttons->button(QDialogButtonBox::Close)->setObjectName("readingCloseBottom");
+            auto* reviewing = buttons->addButton("标记复习中", QDialogButtonBox::ActionRole);
+            reviewing->setObjectName("readingMarkReviewing");
+            reviewing->setEnabled(q->status != "reviewing");
+            // 固定阅读题目的 ID：状态筛选刷新后，主界面的选中题目可能已变化。
+            connect(reviewing, &QPushButton::clicked, &dialog,
+                    [this, id = q->id, browser, reviewing] {
+                        guarded([this, id, browser, reviewing] {
+                            const auto updated = setQuestionStatus(id, "reviewing");
+                            if (updated) {
+                                browser->showQuestion(*updated);
+                                reviewing->setEnabled(false);
+                            }
+                        });
+                    });
             connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
             layout->addWidget(buttons);
+            // 默认全屏阅读；关闭按钮和 Esc 均可返回题库界面。
+            dialog.showFullScreen();
             dialog.exec();
         });
     });
     connect(history_, &QPushButton::clicked, this, &MainWindow::showHistory);
+    connect(reviewing_, &QPushButton::clicked, this, [this] {
+        guarded([this] { setQuestionStatus(selectedId(), "reviewing"); });
+    });
     connect(mastered_, &QPushButton::clicked, this, [this] {
-        guarded([this] {
-            auto q = repository_.find(selectedId());
-            if (!q)
-                return;
-            q->status = "mastered";
-            repository_.update(*q);
-            refresh();
-        });
+        guarded([this] { setQuestionStatus(selectedId(), "mastered"); });
     });
     connect(questions_, &QTableWidget::itemSelectionChanged, this, &MainWindow::showSelected);
     connect(questions_, &QTableWidget::cellDoubleClicked, this, [this] { editQuestion(false); });
@@ -420,6 +445,24 @@ Filter MainWindow::filter() const {
     f.subject = currentSubject_;
     f.difficulty = difficulty_->currentData().toInt();
     f.chapter = chapter_->currentData().toString();
+    const auto group = chapter_->currentData().toMap().value("math_group").toString();
+    if (!group.isEmpty()) {
+        // 板块只汇总数学题的标准章节；旧标签单独放在“其他”目录。
+        f.subject = "mathematics";
+        f.chapter.clear();
+        QStringList known;
+        for (const auto& entry : mathChapters()) {
+            known.append(entry.label());
+            if (entry.group == group)
+                f.chapters.append(entry.label());
+        }
+        if (group == "other")
+            for (const auto& tag : repository_.tags("chapter", "mathematics"))
+                if (!known.contains(tag))
+                    f.chapters.append(tag);
+        if (f.chapters.isEmpty())
+            f.chapters.append(QStringLiteral("")); // 空目录不能退化为全部数学题。
+    }
     f.source = source_->currentData().toString();
     f.status = status_->currentData().toString();
     f.keyword = search_->text();
@@ -435,7 +478,7 @@ void MainWindow::reloadTags() {
             if (item.second == "chapter")
                 populateChapters(item.first,
                                  currentSubject_.isEmpty() || currentSubject_ == "mathematics",
-                                 tags, "所有章节", "");
+                                 tags, "所有章节", "", true);
             else {
                 item.first->clear();
                 item.first->addItem("所有来源", "");
@@ -452,21 +495,24 @@ void MainWindow::showChapterCatalog() {
         QDialog dialog(this);
         dialog.setObjectName("chapterCatalogDialog");
         dialog.setWindowTitle("数学（一） · 教材章节目录");
-        dialog.resize(1000, 780);
+        dialog.resize(1300, 850);
         auto* layout = new QVBoxLayout(&dialog);
-        auto* hint = new QLabel("目录依据您提供的三张教材照片。选择具体章节后点击“查看题目”，或双击"
-                                "章节。数量包含该章节全部数学错题。");
+        auto* hint = new QLabel("选择板块或章节，右侧即时列出其中全部数学题目；点击题目查看详情。"
+                                "点击“查看题目”或双击目录，可返回题库并应用该目录筛选。");
         hint->setWordWrap(true);
         layout->addWidget(hint);
         auto* tree = new QTreeWidget;
         tree->setObjectName("chapterTree");
         tree->setHeaderLabels({"板块 / 讲次 / 章节", "教材页码", "错题数"});
-        tree->setColumnWidth(0, 710);
-        tree->setColumnWidth(1, 100);
+        tree->header()->setStretchLastSection(false);
+        tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+        tree->setColumnWidth(1, 65);
+        tree->setColumnWidth(2, 60);
         Filter math;
         math.subject = "mathematics";
         QMap<QString, int> counts;
-        for (const auto& q : repository_.list(math))
+        const auto mathQuestions = repository_.list(math);
+        for (const auto& q : mathQuestions)
             ++counts[q.chapter];
         QTreeWidgetItem* group = nullptr;
         QString previous;
@@ -474,6 +520,7 @@ void MainWindow::showChapterCatalog() {
             if (entry.group != previous) {
                 previous = entry.group;
                 group = new QTreeWidgetItem(tree, {entry.group, "", "0"});
+                group->setData(0, Qt::UserRole, QVariantMap{{"math_group", entry.group}});
                 auto font = group->font(0);
                 font.setBold(true);
                 group->setFont(0, font);
@@ -482,29 +529,98 @@ void MainWindow::showChapterCatalog() {
             auto* item = new QTreeWidgetItem(
                 group, {entry.heading, QString::number(entry.page), QString::number(count)});
             item->setData(0, Qt::UserRole, entry.label());
+            item->setData(0, Qt::UserRole + 1, QStringList{entry.label()});
             item->setToolTip(0, entry.label());
             group->setText(2, QString::number(group->text(2).toInt() + count));
+            auto labels = group->data(0, Qt::UserRole + 1).toStringList();
+            labels.append(entry.label());
+            group->setData(0, Qt::UserRole + 1, labels);
         }
         if (!counts.isEmpty()) {
             auto* custom = new QTreeWidgetItem(tree, {"其他 / 待标注 / 自定义章节", "", "0"});
+            custom->setData(0, Qt::UserRole, QVariantMap{{"math_group", "other"}});
+            custom->setData(0, Qt::UserRole + 1, counts.keys());
             int total = 0;
             for (auto it = counts.cbegin(); it != counts.cend(); ++it) {
                 auto* item =
                     new QTreeWidgetItem(custom, {it.key(), "—", QString::number(it.value())});
                 item->setData(0, Qt::UserRole, it.key());
+                item->setData(0, Qt::UserRole + 1, QStringList{it.key()});
                 total += it.value();
             }
             custom->setText(2, QString::number(total));
         }
         tree->expandAll();
-        layout->addWidget(tree, 1);
+        auto* split = new QSplitter;
+        split->addWidget(tree);
+        auto* right = new QWidget;
+        auto* rightLayout = new QVBoxLayout(right);
+        rightLayout->setContentsMargins(8, 0, 0, 0);
+        auto* summary = new QLabel;
+        summary->setObjectName("catalogSummary");
+        summary->setWordWrap(true);
+        rightLayout->addWidget(summary);
+        auto* readingSplit = new QSplitter(Qt::Vertical);
+        auto* rows = table({"题目", "难度", "来源"});
+        rows->setObjectName("catalogQuestions");
+        rows->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+        rows->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+        rows->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+        readingSplit->addWidget(rows);
+        auto* preview = new MathBrowser;
+        preview->setObjectName("catalogPreview");
+        readingSplit->addWidget(preview);
+        readingSplit->setStretchFactor(0, 1);
+        readingSplit->setStretchFactor(1, 2);
+        rightLayout->addWidget(readingSplit, 1);
+        split->addWidget(right);
+        split->setStretchFactor(0, 5);
+        split->setStretchFactor(1, 6);
+        split->setSizes({570, 690});
+        layout->addWidget(split, 1);
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
         auto* view = buttons->addButton("查看题目", QDialogButtonBox::AcceptRole);
         view->setObjectName("viewChapter");
         view->setEnabled(false);
-        connect(tree, &QTreeWidget::itemSelectionChanged, &dialog, [tree, view] {
-            const auto* item = tree->currentItem();
-            view->setEnabled(item && item->data(0, Qt::UserRole).isValid());
+        connect(rows, &QTableWidget::itemSelectionChanged, &dialog,
+                [rows, preview, mathQuestions] {
+                    const auto* selected = rows->item(rows->currentRow(), 0);
+                    if (!selected)
+                        return;
+                    for (const auto& q : mathQuestions)
+                        if (q.id == selected->data(Qt::UserRole).toString()) {
+                            preview->showQuestion(q);
+                            return;
+                        }
+                });
+        connect(tree, &QTreeWidget::itemSelectionChanged, &dialog,
+                [tree, view, rows, preview, summary, mathQuestions] {
+                    const auto* item = tree->currentItem();
+                    view->setEnabled(item && item->data(0, Qt::UserRole).isValid());
+                    const auto labels = item ? item->data(0, Qt::UserRole + 1).toStringList()
+                                             : QStringList{};
+                    rows->setRowCount(0);
+                    preview->showText("当前目录暂无题目。");
+                    // 使用同一份只读题目快照，确保列表、目录数量和预览一致。
+                    for (const auto& q : mathQuestions) {
+                        if (!labels.contains(q.chapter))
+                            continue;
+                        const int row = rows->rowCount();
+                        rows->insertRow(row);
+                        const QStringList cells{q.title, QString::number(q.difficulty), q.source};
+                        for (int col = 0; col < cells.size(); ++col) {
+                            auto* cell = new QTableWidgetItem(cells.at(col));
+                            cell->setToolTip(cells.at(col));
+                            if (col == 0)
+                                cell->setData(Qt::UserRole, q.id);
+                            rows->setItem(row, col, cell);
+                        }
+                    }
+                    summary->setText(QString("%1 · %2 道题")
+                                         .arg(item ? item->text(0) : QString("请选择目录"))
+                                         .arg(rows->rowCount()));
+                    if (rows->rowCount() > 0)
+                        rows->selectRow(0);
         });
         const auto select = [this, tree, &dialog] {
             const auto* item = tree->currentItem();
@@ -527,6 +643,13 @@ void MainWindow::showChapterCatalog() {
         connect(tree, &QTreeWidget::itemDoubleClicked, &dialog, [select] { select(); });
         connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
         layout->addWidget(buttons);
+        // 重新打开时优先定位当前筛选目录，首次打开默认展示高等数学。
+        tree->setCurrentItem(tree->topLevelItem(0));
+        for (QTreeWidgetItemIterator it(tree); *it; ++it)
+            if ((*it)->data(0, Qt::UserRole) == chapter_->currentData()) {
+                tree->setCurrentItem(*it);
+                break;
+            }
         dialog.exec();
     });
 }
@@ -600,6 +723,7 @@ void MainWindow::showSelected() {
         const auto q = repository_.find(selectedId());
         edit_->setEnabled(q.has_value());
         read_->setEnabled(q.has_value());
+        reviewing_->setEnabled(q && q->status != "reviewing");
         mastered_->setEnabled(q && q->status != "mastered");
         history_->setEnabled(q.has_value());
         if (q)
@@ -609,6 +733,18 @@ void MainWindow::showSelected() {
                 "让错题有迹可循\n\n从“加入错题”开始，保存题目与解析。\n\n使用难度、章节和来源索引找"
                 "回历史提问。\n\n专业课839是默认学科，章节按您的教材自由填写。");
     });
+}
+std::optional<Question> MainWindow::setQuestionStatus(const QString& id, const QString& status) {
+    // 每次读取最新记录，保留题干、解析、笔记与历史问答；相同状态不重复写历史。
+    auto q = repository_.find(id);
+    if (!q)
+        return std::nullopt;
+    if (q->status != status) {
+        q->status = status;
+        repository_.update(*q);
+    }
+    refresh();
+    return repository_.find(id);
 }
 void MainWindow::editQuestion(bool create) {
     guarded([this, create] {

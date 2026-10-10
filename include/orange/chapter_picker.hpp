@@ -3,7 +3,8 @@
 #include <QStringList>
 class QComboBox;
 namespace orange {
-// 共享录入和筛选目录；组标题不可保存为章节，自定义标签保持兼容。
+// 录入时组标题不可保存为章节；筛选时可启用目录汇总，自定义标签保持兼容。
 void populateChapters(QComboBox* combo, bool includeMath, const QStringList& extraTags,
-                      const QString& firstText, const QString& firstValue);
+                      const QString& firstText, const QString& firstValue,
+                      bool selectGroups = false);
 } // namespace orange

@@ -232,6 +232,15 @@ QVector<Question> Repository::list(const Filter& f) const {
         equal("difficulty", f.difficulty);
     if (!f.chapter.isEmpty())
         equal("chapter", f.chapter);
+    if (!f.chapters.isEmpty()) {
+        // 参数绑定精确匹配各章节，并与来源、难度等筛选取交集。
+        QStringList placeholders;
+        for (const auto& chapter : f.chapters) {
+            placeholders.append("?");
+            bindings.append(chapter);
+        }
+        sql += " AND chapter IN (" + placeholders.join(',') + ")";
+    }
     if (!f.source.isEmpty())
         equal("source", f.source);
     if (!f.status.isEmpty())

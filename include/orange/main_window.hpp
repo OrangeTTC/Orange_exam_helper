@@ -34,6 +34,7 @@ class MainWindow : public QMainWindow {
     Filter filter() const;
     QString selectedId() const;
     void showSelected();
+    std::optional<Question> setQuestionStatus(const QString& id, const QString& status);
     void editQuestion(bool create);
     void showHistory();
     void toggleTimer();
@@ -48,7 +49,7 @@ class MainWindow : public QMainWindow {
     QComboBox *difficulty_, *chapter_, *source_, *status_, *timerSubject_, *mode_;
     QLineEdit *search_, *timerLabel_;
     QLabel *count_, *pending_, *today_, *resultCount_, *clock_, *timerHint_;
-    QPushButton *edit_, *read_, *mastered_, *history_, *start_, *save_;
+    QPushButton *edit_, *read_, *reviewing_, *mastered_, *history_, *start_, *save_;
     QCheckBox* linkQuestion_;
     QSpinBox* minutes_;
     QTimer* ticker_;
