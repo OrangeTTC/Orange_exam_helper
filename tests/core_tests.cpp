@@ -2,6 +2,7 @@
 #include "orange/chapter_catalog.hpp"
 #include "orange/repository.hpp"
 #include "orange/study_timer.hpp"
+#include "orange/study_analysis.hpp"
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -24,6 +25,42 @@ class CoreTests : public QObject {
         return q;
     }
   private slots:
+    void questionAnalysisCounts() {
+        auto q = example("mathematics");
+        q.chapter = mathChapters().first().label();
+        QVector<Question> records{q};
+        q.status = "reviewing";
+        records.append(q);
+        q.status = "mastered";
+        records.append(q);
+        q.subject = "professional";
+        records.append(q); // 同名章节按科目隔离，掌握状态不计入待复习。
+        q.chapter = "待标注";
+        q.status = "pending";
+        records.append(q);
+        q.subject = "mathematics";
+        records.append(q);
+        const auto stats = analyzeQuestions(records);
+        QCOMPARE(stats.subjects.size(), 4);
+        QCOMPARE(stats.subjects.at(0).total, 2);
+        QCOMPARE(stats.subjects.at(0).unmastered, 1);
+        QCOMPARE(stats.subjects.at(1).total, 4);
+        QCOMPARE(stats.subjects.at(1).unmastered, 3);
+        QCOMPARE(stats.subjects.at(2).total, 0);
+        const auto math = stats.chapters.value("mathematics");
+        QCOMPARE(math.size(), 38);
+        QCOMPARE(math.first().key, mathChapters().first().label());
+        QCOMPARE(math.first().total, 3);
+        QCOMPARE(math.first().unmastered, 2);
+        QCOMPARE(math.at(1).total, 0);
+        QCOMPARE(math.last().key, QString("待标注"));
+        QCOMPARE(math.last().total, 1);
+        QCOMPARE(stats.chapters.value("professional").size(), 2);
+        const auto empty = analyzeQuestions({});
+        QCOMPARE(empty.chapters.value("mathematics").size(), 37);
+        QVERIFY(empty.chapters.value("professional").isEmpty());
+        QCOMPARE(empty.subjects.at(0).total, 0);
+    }
     void textbookChapterCatalog() {
         const auto& chapters = mathChapters();
         QCOMPARE(chapters.size(), 37);

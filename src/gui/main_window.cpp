@@ -1,5 +1,6 @@
 // Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
 #include "orange/main_window.hpp"
+#include "orange/analysis_page.hpp"
 #include "orange/chapter_catalog.hpp"
 #include "orange/chapter_picker.hpp"
 #include "orange/math_browser.hpp"
@@ -114,7 +115,7 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
     navigation_->setObjectName("navigation");
     navigation_->setFixedWidth(230);
     navigation_->addItems({"专业课 · 839", "数学（一）", "英语", "政治", "全部错题"});
-    navigation_->setCurrentRow(0);
+    navigation_->setCurrentRow(4);
     sidebar->addWidget(navigation_, 1);
     auto* target = new QLabel(
         "目标院校\n电子科技大学\n\n数学（一） · 专业课 839\n\n作者 Orange\nApache License 2.0");
@@ -126,10 +127,14 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
     outer->addLayout(sidebar);
     auto* main = new QVBoxLayout;
     main->setSpacing(18);
-    main->addWidget(title("每一道错题，都是进步的入口"));
+    auto* overview = new QWidget;
+    auto* overviewLayout = new QVBoxLayout(overview);
+    overviewLayout->setContentsMargins(0, 0, 0, 0);
+    overviewLayout->setSpacing(18);
+    overviewLayout->addWidget(title("每一道错题，都是进步的入口"));
     auto* subtitle = new QLabel("本地题库 · 标签索引 · 历史问答 · 专注计时");
     subtitle->setObjectName("muted");
-    main->addWidget(subtitle);
+    overviewLayout->addWidget(subtitle);
     auto* metrics = new QHBoxLayout;
     const auto metric = [metrics](const QString& name) {
         auto* card = new QFrame;
@@ -144,14 +149,25 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
         metrics->addWidget(card);
         return value;
     };
-    count_ = metric("当前学科 · 错题数");
-    pending_ = metric("当前学科 · 尚未掌握");
+    count_ = metric("当前范围 · 错题数");
+    pending_ = metric("当前范围 · 尚未掌握");
     today_ = metric("全部学科 · 今日已保存专注");
-    main->addLayout(metrics);
+    overviewLayout->addLayout(metrics);
+    main->addWidget(overview);
     auto* tabs = new QTabWidget;
     tabs->setObjectName("mainTabs");
     tabs->addTab(libraryPage(), "错题本");
     tabs->addTab(timerPage(), "学习计时");
+    analysis_ = new AnalysisPage;
+    tabs->addTab(analysis_, "错题分析");
+    connect(tabs, &QTabWidget::currentChanged, this, [this, overview](int index) {
+        // 分析页已有统计摘要，收起重复信息卡，为完整坐标轴留出高度。
+        overview->setVisible(index != 2);
+        if (index == 2)
+            refresh(); // 进入分析页时同步 CLI 录入及其他窗口保存的数据。
+    });
+    connect(analysis_->findChild<QPushButton*>("refreshAnalysis"), &QPushButton::clicked,
+            this, &MainWindow::refresh);
     main->addWidget(tabs, 1);
     outer->addLayout(main, 1);
     setCentralWidget(root);
@@ -164,7 +180,7 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
     connect(about, &QPushButton::clicked, this, [this] {
         QMessageBox::information(
             this, "Orange 考研助手",
-            "作者：Orange\n版本：1.3.4\n项目许可：Apache License 2.0\n\n"
+            "作者：Orange\n版本：1.4.0\n项目许可：Apache License 2.0\n\n"
             "考试配置：数学（一）、电子科技大学 "
             "839。\n数学目录按用户教材划分，其他学科章节自由填写。\n\n题库位置：\n" +
                 repository_.databasePath() +
@@ -716,6 +732,7 @@ void MainWindow::refresh() {
             }
         }
         today_->setText(duration(today));
+        analysis_->setQuestions(repository_.list(), currentSubject_);
     });
 }
 void MainWindow::showSelected() {
@@ -731,7 +748,7 @@ void MainWindow::showSelected() {
         else
             detail_->showText(
                 "让错题有迹可循\n\n从“加入错题”开始，保存题目与解析。\n\n使用难度、章节和来源索引找"
-                "回历史提问。\n\n专业课839是默认学科，章节按您的教材自由填写。");
+                "回历史提问。\n\n启动显示全部错题；新增题目的默认科目为专业课839，章节按您的教材填写。");
     });
 }
 std::optional<Question> MainWindow::setQuestionStatus(const QString& id, const QString& status) {

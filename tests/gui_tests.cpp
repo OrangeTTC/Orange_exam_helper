@@ -7,9 +7,12 @@
 #include <QAbstractItemModel>
 #include <QComboBox>
 #include <QDialog>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -135,6 +138,113 @@ class GuiTests : public QObject {
         QCOMPARE(repo.history(saved.id).size(), 1);
         QCOMPARE(repo.find(saved.id)->updatedAt, saved.updatedAt);
         QCOMPARE(repo.list().size(), 6);
+    }
+    void startupAndAnalysis() {
+        QTemporaryDir dir;
+        Repository repo(dir.path());
+        Question q;
+        q.title = "分析统计测试";
+        q.content = "仅用于临时题库";
+        QString firstProfessional;
+        for (int chapter = 1; chapter <= 40; ++chapter) {
+            q.chapter = QString("第%1章 专业课测试章节").arg(chapter);
+            const auto saved = repo.add(q);
+            if (chapter == 1)
+                firstProfessional = saved.id;
+        }
+        q.subject = "mathematics";
+        q.chapter = mathChapters().first().label();
+        repo.add(q);
+        q.status = "reviewing";
+        repo.add(q);
+        q.status = "mastered";
+        repo.add(q);
+        q.status = "pending";
+        q.chapter = "待标注";
+        repo.add(q);
+        MainWindow window(repo);
+        window.show();
+        auto* navigation = window.findChild<QListWidget*>("navigation");
+        QCOMPARE(navigation->currentItem()->text(), QString("全部错题"));
+        QCOMPARE(window.findChild<QTableWidget*>("questions")->rowCount(), 44);
+        auto* tabs = window.findChild<QTabWidget*>("mainTabs");
+        QCOMPARE(tabs->count(), 3);
+        QCOMPARE(tabs->tabText(2), QString("错题分析"));
+        tabs->setCurrentIndex(2);
+        QTest::qWait(50); // 等待收起概览卡后的布局，验证实际可见的坐标轴区域。
+        auto* ranking = window.findChild<QTableWidget*>("analysisRanking");
+        auto* dimension = window.findChild<QComboBox*>("analysisDimension");
+        auto* subject = window.findChild<QComboBox*>("analysisSubject");
+        auto* group = window.findChild<QComboBox*>("analysisMathGroup");
+        auto* scroll = window.findChild<QScrollArea*>("analysisScroll");
+        QVERIFY(ranking && dimension && subject && group && scroll);
+        QCOMPARE(ranking->rowCount(), 4);
+        QCOMPARE(ranking->item(0, 0)->data(Qt::UserRole).toString(), QString("professional"));
+        QCOMPARE(ranking->item(0, 1)->text(), QString("40"));
+        QCOMPARE(ranking->item(1, 1)->text(), QString("4"));
+        QCOMPARE(ranking->item(1, 2)->text(), QString("3"));
+        const auto screenshotDir = qEnvironmentVariable("ORANGE_SCREENSHOT_DIR");
+        if (!screenshotDir.isEmpty())
+            QVERIFY(window.grab().save(screenshotDir + "/analysis-subjects.png"));
+        dimension->setCurrentIndex(dimension->findData("chapters"));
+        QCOMPARE(ranking->rowCount(), 38);
+        QCOMPARE(ranking->item(0, 0)->text(), mathChapters().first().label());
+        QCOMPARE(ranking->item(0, 1)->text(), QString("3"));
+        QCOMPARE(ranking->item(0, 2)->text(), QString("2"));
+        QVERIFY(scroll->widget()->minimumWidth() >= 37 * 148);
+        QTest::qWait(30);
+        QVERIFY(scroll->horizontalScrollBar()->maximum() > 0);
+        if (!screenshotDir.isEmpty()) {
+            QVERIFY(window.grab().save(screenshotDir + "/analysis-math.png"));
+            QVERIFY(scroll->widget()->grab().save(screenshotDir + "/analysis-math-full.png"));
+        }
+        QTimer::singleShot(50, &window, [&window, screenshotDir] {
+            auto* dialog = window.findChild<QDialog*>("analysisChartDialog");
+            QVERIFY(dialog);
+            QTimer::singleShot(3000, dialog, &QDialog::reject);
+            QVERIFY(dialog->isFullScreen());
+            auto* enlarged = dialog->findChild<QWidget*>("analysisChart");
+            QVERIFY(enlarged);
+            QVERIFY(enlarged->minimumWidth() >= 37 * 148);
+            if (!screenshotDir.isEmpty())
+                QVERIFY(dialog->grab().save(screenshotDir + "/analysis-enlarged.png"));
+            QTest::mouseClick(dialog->findChild<QPushButton*>("closeAnalysisChart"), Qt::LeftButton);
+            QVERIFY(!dialog->isVisible());
+        });
+        QTest::mouseClick(window.findChild<QPushButton*>("enlargeAnalysis"), Qt::LeftButton);
+        group->setCurrentIndex(group->findData("线性代数"));
+        QCOMPARE(ranking->rowCount(), 7);
+        group->setCurrentIndex(group->findData("other"));
+        QCOMPARE(ranking->rowCount(), 1);
+        QCOMPARE(ranking->item(0, 0)->text(), QString("待标注"));
+        subject->setCurrentIndex(subject->findData("professional"));
+        QCOMPARE(ranking->rowCount(), 40);
+        QVERIFY(scroll->widget()->minimumWidth() >= 40 * 148);
+        QCOMPARE(ranking->item(1, 0)->text(), QString("第2章 专业课测试章节"));
+        QTest::qWait(30);
+        if (!screenshotDir.isEmpty())
+            QVERIFY(window.grab().save(screenshotDir + "/analysis-professional.png"));
+        // 关键词筛选不能截断分析；刷新应读取独立 CLI/其他窗口保存的状态。
+        window.findChild<QLineEdit*>("search")->setText("不存在的关键词");
+        QTRY_COMPARE(window.findChild<QTableWidget*>("questions")->rowCount(), 0);
+        QCOMPARE(ranking->rowCount(), 40);
+        auto changed = *repo.find(firstProfessional);
+        changed.status = "mastered";
+        repo.update(changed);
+        QTest::mouseClick(window.findChild<QPushButton*>("refreshAnalysis"), Qt::LeftButton);
+        QCOMPARE(ranking->item(39, 0)->data(Qt::UserRole).toString(), changed.chapter);
+        QCOMPARE(ranking->item(39, 2)->text(), QString("0"));
+        QCOMPARE(repo.history(firstProfessional).size(), 2);
+        QCOMPARE(repo.list().size(), 44);
+        subject->setCurrentIndex(subject->findData("english"));
+        QCOMPARE(ranking->rowCount(), 0);
+        QVERIFY(window.findChild<QLabel*>("analysisSummary")->text().contains("暂无"));
+        // 左侧选择数学时同步章节科目，返回全部范围不丢失用户选择。
+        navigation->setCurrentRow(1);
+        QCOMPARE(subject->currentData().toString(), QString("mathematics"));
+        navigation->setCurrentRow(4);
+        QCOMPARE(subject->currentData().toString(), QString("mathematics"));
+        QCOMPARE(repo.history(firstProfessional).size(), 2);
     }
     void quickReviewingStatus() {
         QTemporaryDir dir;

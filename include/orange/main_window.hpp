@@ -17,6 +17,7 @@ class QTimer;
 
 namespace orange {
 class MathBrowser;
+class AnalysisPage;
 class MainWindow : public QMainWindow {
   public:
     explicit MainWindow(Repository& repository, QWidget* parent = nullptr);
@@ -42,10 +43,11 @@ class MainWindow : public QMainWindow {
     void updateTimer();
     void clearTimer();
     Repository& repository_;
-    QString currentSubject_ = "professional";
+    QString currentSubject_; // 启动显示全部错题；新增题目的默认科目仍为专业课。
     QListWidget* navigation_;
     QTableWidget *questions_, *sessions_;
     MathBrowser* detail_;
+    AnalysisPage* analysis_;
     QComboBox *difficulty_, *chapter_, *source_, *status_, *timerSubject_, *mode_;
     QLineEdit *search_, *timerLabel_;
     QLabel *count_, *pending_, *today_, *resultCount_, *clock_, *timerHint_;

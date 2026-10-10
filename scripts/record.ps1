@@ -3,7 +3,7 @@
 param([Parameter(Mandatory=$true)][string]$JsonFile)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$cliPath = Join-Path $projectRoot 'release\OrangeStudy-1.3.4\orange-cli.exe'
+$cliPath = Join-Path $projectRoot 'release\OrangeStudy-1.4.0\orange-cli.exe'
 if (!(Test-Path -LiteralPath $cliPath)) { throw 'Run scripts/build.ps1 -Package first.' }
 & $cliPath --data-dir (Join-Path $projectRoot 'data') import $JsonFile
 if ($LASTEXITCODE -ne 0) { throw 'Question import failed; see the error above.' }
