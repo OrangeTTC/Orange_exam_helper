@@ -28,6 +28,42 @@ class MathTests : public QObject {
     void cleanup() {
         orange::ReadingPreferences::instance().setFontSize(15);
     }
+    void concealedAnswerSurvivesRendering() {
+        orange::Question q;
+        q.title = "先解题再看解析";
+        q.content = "题干 $x^2$";
+        q.answer = "答案标记 $\\frac{1}{2}$";
+        q.notes = "笔记标记 $\\sqrt2$";
+        q.conversation = "问答标记";
+        orange::MathBrowser browser;
+        browser.resize(800, 600);
+        browser.setAnswerVisible(false);
+        browser.showQuestion(q);
+        browser.show();
+        orange::ReadingPreferences::instance().setFontSize(24);
+        browser.resize(900, 700);
+        QTest::qWait(160);
+        QVERIFY(!browser.answerVisible());
+        QCOMPARE(browser.formulaCount(), 1);
+        for (const auto& hidden : {"答案标记", "笔记标记", "问答标记"}) {
+            QVERIFY(!browser.toPlainText().contains(hidden));
+            QVERIFY(!browser.sourceText().contains(hidden));
+        }
+        q.status = "reviewing";
+        browser.showQuestion(q);
+        QVERIFY(!browser.answerVisible());
+        QVERIFY(!browser.toPlainText().contains("答案标记"));
+        browser.setAnswerVisible(true);
+        QCOMPARE(browser.formulaCount(), 3);
+        for (const auto& revealed : {"答案标记", "笔记标记", "问答标记"}) {
+            QVERIFY(browser.toPlainText().contains(revealed));
+            QVERIFY(browser.sourceText().contains(revealed));
+        }
+        orange::MathBrowser normal;
+        normal.showQuestion(q);
+        QVERIFY(normal.answerVisible());
+        QVERIFY(normal.toPlainText().contains("答案标记"));
+    }
     void fontSizeSyncAndPersistence() {
         orange::MathBrowser first, second;
         first.resize(1000, 700);

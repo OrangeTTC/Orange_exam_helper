@@ -1,6 +1,6 @@
 # Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.21)
-project(OrangeStudy VERSION 1.4.0 LANGUAGES CXX)
+project(OrangeStudy VERSION 1.4.1 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

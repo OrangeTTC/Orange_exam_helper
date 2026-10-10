@@ -106,10 +106,18 @@ void MathBrowser::showText(const QString& text) {
     text_ = text;
     render();
 }
+void MathBrowser::setAnswerVisible(bool visible) {
+    if (answerVisible_ == visible)
+        return;
+    answerVisible_ = visible;
+    render();
+}
 QString MathBrowser::sourceText() const {
     if (!question_)
         return text_;
     const auto& q = *question_;
+    if (!answerVisible_)
+        return q.title + "\n\n题目\n" + q.content + "\n\n答案与解析已隐藏。";
     return q.title + "\n\n题目\n" + q.content + "\n\n答案与解析\n" + q.answer + "\n\n错因与笔记\n" +
            q.notes + "\n\n历史问答\n" + q.conversation;
 }
@@ -223,12 +231,18 @@ void MathBrowser::render() {
                subjectLabel(q.subject).toHtmlEscaped() + " · 难度 " +
                QString::number(q.difficulty) + " · " + statusLabel(q.status) + "</p><p>章节：" +
                q.chapter.toHtmlEscaped() + "<br>来源：" + q.source.toHtmlEscaped() + "</p>";
-        for (const auto& section : {std::make_pair(QString("题目"), q.content),
-                                    std::make_pair(QString("答案与解析"), q.answer),
+        html += "<h3>题目</h3>" + mathHtml(q.content);
+        if (!answerVisible_)
+            html += "<h3>答案与解析已隐藏</h3><p>请先尝试解题，再按 Enter 或点击“显示答案”查看。"
+                    "<br>错因、笔记和历史问答也将在显示答案后展开。</p>";
+        else {
+            html += "<a name='answer'></a>";
+            for (const auto& section : {std::make_pair(QString("答案与解析"), q.answer),
                                     std::make_pair(QString("错因与笔记"), q.notes),
                                     std::make_pair(QString("历史问答"), q.conversation)})
-            html += "<h3>" + section.first + "</h3>" +
-                    mathHtml(section.second.isEmpty() ? "尚未填写" : section.second);
+                html += "<h3>" + section.first + "</h3>" +
+                        mathHtml(section.second.isEmpty() ? "尚未填写" : section.second);
+        }
         html += "<hr><p>加入：" + date(q.createdAt) + "<br>更新：" + date(q.updatedAt) +
                 "<br>ID：" + q.id + "</p>";
     }

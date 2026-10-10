@@ -11,6 +11,11 @@ class MathBrowser : public QTextBrowser {
   public:
     explicit MathBrowser(QWidget* parent = nullptr);
     void showQuestion(const Question& question);
+    // 仅控制当前阅读器的显示与复制内容，字号及状态刷新不得重置此状态。
+    void setAnswerVisible(bool visible);
+    bool answerVisible() const {
+        return answerVisible_;
+    }
     void showText(const QString& text);
     QString sourceText() const;
     int formulaCount() const {
@@ -33,6 +38,7 @@ class MathBrowser : public QTextBrowser {
     int formulaCount_ = 0;
     int errorCount_ = 0;
     bool renderPending_ = false;
+    bool answerVisible_ = true;
     int fontSize_ = 15;
 };
 } // namespace orange

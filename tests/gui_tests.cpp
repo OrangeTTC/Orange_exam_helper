@@ -348,6 +348,78 @@ class GuiTests : public QObject {
         QCOMPARE(repo.history(second.id).size(), 2);
         QCOMPARE(repo.find(second.id)->conversation, second.conversation);
     }
+    void revealAnswerInReading() {
+        QTemporaryDir dir;
+        Repository repo(dir.path());
+        Question q;
+        q.title = "隐藏答案阅读测试";
+        q.content = "请先思考：$x^2$";
+        q.answer = "解析标记 $\\frac{1}{2}$";
+        q.notes = "笔记标记";
+        q.conversation = "问答标记";
+        const auto saved = repo.add(q);
+        MainWindow window(repo);
+        window.show();
+        // 每次重开都隐藏：覆盖按钮、主键盘回车、小键盘 Enter 和字号控件焦点。
+        for (int method = 0; method < 4; ++method) {
+            QTimer::singleShot(50, &window, [&window, method] {
+                auto* dialog = window.findChild<QDialog*>("readingDialog");
+                QVERIFY(dialog);
+                QTimer::singleShot(4000, dialog, &QDialog::reject);
+                auto* browser = dynamic_cast<MathBrowser*>(
+                    dialog->findChild<QTextBrowser*>("readingContent"));
+                auto* reveal = dialog->findChild<QPushButton*>("revealAnswer");
+                auto* close = dialog->findChild<QPushButton*>("closeReading");
+                auto* size = dialog->findChild<QSpinBox*>("readingFontSize");
+                QVERIFY(browser && reveal && close && size);
+                QVERIFY(!browser->answerVisible());
+                QVERIFY(reveal->isEnabled());
+                QVERIFY(!browser->toPlainText().contains("解析标记"));
+                QVERIFY(!browser->sourceText().contains("解析标记"));
+                size->setValue(21);
+                QTest::qWait(160);
+                QVERIFY(!browser->answerVisible());
+                if (method == 0) {
+                    QTest::mouseClick(dialog->findChild<QPushButton*>("readingMarkReviewing"), Qt::LeftButton);
+                    QVERIFY(!browser->answerVisible());
+                    QVERIFY(!browser->toPlainText().contains("解析标记"));
+                    const auto screenshotDir = qEnvironmentVariable("ORANGE_SCREENSHOT_DIR");
+                    if (!screenshotDir.isEmpty())
+                        QVERIFY(dialog->grab().save(screenshotDir + "/answer-hidden.png"));
+                    QTest::mouseClick(reveal, Qt::LeftButton);
+                } else if (method == 1) {
+                    browser->setFocus();
+                    QTest::keyClick(browser, Qt::Key_Return);
+                } else if (method == 2) {
+                    close->setFocus();
+                    QTest::keyClick(close, Qt::Key_Enter);
+                } else {
+                    size->setFocus();
+                    QTest::keyClick(size, Qt::Key_Return);
+                }
+                QTRY_VERIFY(browser->answerVisible());
+                QVERIFY(dialog->isVisible());
+                QVERIFY(!reveal->isEnabled());
+                for (const auto& text : {"解析标记", "笔记标记", "问答标记"})
+                    QVERIFY(browser->toPlainText().contains(text));
+                QVERIFY(browser->sourceText().contains("解析标记"));
+                QCOMPARE(browser->formulaCount(), 2);
+                QCOMPARE(browser->errorCount(), 0);
+                // 展开后回车也不触发默认关闭按钮。
+                close->setFocus();
+                QTest::keyClick(close, Qt::Key_Return);
+                QVERIFY(dialog->isVisible());
+                const auto screenshotDir = qEnvironmentVariable("ORANGE_SCREENSHOT_DIR");
+                if (method == 0 && !screenshotDir.isEmpty())
+                    QVERIFY(dialog->grab().save(screenshotDir + "/answer-revealed.png"));
+                QTest::mouseClick(close, Qt::LeftButton);
+            });
+            QTest::mouseClick(window.findChild<QPushButton*>("readQuestion"), Qt::LeftButton);
+        }
+        QCOMPARE(repo.find(saved.id)->answer, saved.answer);
+        QCOMPARE(repo.find(saved.id)->conversation, saved.conversation);
+        QCOMPARE(repo.history(saved.id).size(), 2); // 仅明确标记复习中产生一次编辑快照。
+    }
     void addFilterEditAndTimer() {
         QTemporaryDir dir;
         Repository repository(dir.path());

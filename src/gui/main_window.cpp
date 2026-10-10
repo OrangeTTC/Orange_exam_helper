@@ -21,6 +21,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStatusBar>
@@ -180,7 +181,7 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
     connect(about, &QPushButton::clicked, this, [this] {
         QMessageBox::information(
             this, "Orange 考研助手",
-            "作者：Orange\n版本：1.4.0\n项目许可：Apache License 2.0\n\n"
+            "作者：Orange\n版本：1.4.1\n项目许可：Apache License 2.0\n\n"
             "考试配置：数学（一）、电子科技大学 "
             "839。\n数学目录按用户教材划分，其他学科章节自由填写。\n\n题库位置：\n" +
                 repository_.databasePath() +
@@ -299,6 +300,8 @@ QWidget* MainWindow::libraryPage() {
             auto* layout = new QVBoxLayout(&dialog);
             auto* readingHeader = new QHBoxLayout;
             readingHeader->addWidget(createReadingToolbar(), 1);
+            auto* revealAnswer = button("显示答案（Enter）", "revealAnswer");
+            readingHeader->addWidget(revealAnswer);
             // 全屏没有系统标题栏，关闭入口固定在正文滚动区域之外。
             auto* closeReading = button("关闭阅读", "closeReading");
             closeReading->setToolTip("返回题库（Esc）");
@@ -308,7 +311,25 @@ QWidget* MainWindow::libraryPage() {
             auto* browser = new MathBrowser;
             browser->setObjectName("readingContent");
             layout->addWidget(browser);
+            browser->setAnswerVisible(false);
             browser->showQuestion(*q);
+            const auto reveal = [browser, revealAnswer] {
+                if (browser->answerVisible())
+                    return;
+                browser->setAnswerVisible(true);
+                revealAnswer->setText("答案已显示");
+                revealAnswer->setEnabled(false);
+                browser->scrollToAnchor("answer");
+                browser->setFocus();
+            };
+            connect(revealAnswer, &QPushButton::clicked, &dialog, reveal);
+            // 主键盘回车与小键盘 Enter 均可展开；重复按键不关闭阅读窗口。
+            for (const auto key : {Qt::Key_Return, Qt::Key_Enter}) {
+                auto* shortcut = new QShortcut(QKeySequence(key), &dialog);
+                shortcut->setContext(Qt::WidgetWithChildrenShortcut);
+                shortcut->setAutoRepeat(false);
+                connect(shortcut, &QShortcut::activated, &dialog, reveal);
+            }
             auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
             buttons->button(QDialogButtonBox::Close)->setText("关闭");
             buttons->button(QDialogButtonBox::Close)->setObjectName("readingCloseBottom");
@@ -328,8 +349,13 @@ QWidget* MainWindow::libraryPage() {
                     });
             connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
             layout->addWidget(buttons);
+            for (auto* action : dialog.findChildren<QPushButton*>()) {
+                action->setAutoDefault(false);
+                action->setDefault(false);
+            }
             // 默认全屏阅读；关闭按钮和 Esc 均可返回题库界面。
             dialog.showFullScreen();
+            browser->setFocus();
             dialog.exec();
         });
     });

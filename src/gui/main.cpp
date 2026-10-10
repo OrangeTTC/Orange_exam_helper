@@ -9,7 +9,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName("Orange");
     QCoreApplication::setApplicationName("OrangeStudy");
-    QCoreApplication::setApplicationVersion("1.4.0");
+    QCoreApplication::setApplicationVersion("1.4.1");
     QCommandLineParser parser;
     parser.setApplicationDescription("Orange 考研助手 · 本地错题本与学习计时");
     parser.addHelpOption();

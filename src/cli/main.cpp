@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
     app.setOrganizationName("Orange");
     app.setApplicationName("OrangeStudy");
-    app.setApplicationVersion("1.4.0");
+    app.setApplicationVersion("1.4.1");
     QCommandLineParser parser;
     parser.setApplicationDescription(
         "Orange 错题录入工具；与 GUI 共用 SQLite。输出为 UTF-8 JSON。\n"
