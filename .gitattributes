@@ -1,0 +1,15 @@
+# Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
+# 源文件统一 LF；Windows 启动器在检出时使用 CRLF。
+* text=auto eol=lf
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.h text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.ttf binary
+# 保留第三方上游格式，其原有空白不参与原创代码的格式检查。
+third_party/** -whitespace

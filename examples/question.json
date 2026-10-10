@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "questions": [
+    {
+      "subject": "professional",
+      "title": "录入格式示例（请替换成真实题目）",
+      "content": "在这里填写题干。该示例仅演示数据格式，不代表 839 考试内容。",
+      "answer": "在这里填写答案与解析。",
+      "notes": "在这里记录错因。",
+      "conversation": "问：……\n答：……\n追问：……",
+      "difficulty": 3,
+      "chapter": "待标注",
+      "source": "个人提问",
+      "status": "pending"
+    }
+  ]
+}

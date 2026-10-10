@@ -1,0 +1,10 @@
+/build*/
+/.tools/
+/release/
+/data/*
+!/data/.gitkeep
+*.user
+*.sqlite*
+*.db*
+*.log
+*.lnk
