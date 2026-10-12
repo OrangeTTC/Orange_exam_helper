@@ -12,7 +12,7 @@ Git 仓库提供源码、测试与构建脚本。个人题库、本机工具链�
 
 ## 使用
 
-在本项目中双击根目录 **Start.cmd** 启动已编译的 Windows 版（1.4.2）；所有题目、问答和计时保存在项目根目录 `data/orange-study.sqlite3`。如果只复制 `release/OrangeStudy-1.4.2`，双击其中的 Start.cmd，便携版会在自己的 `data` 目录保存题库。两种启动方式数据目录不同，迁移时可使用 JSON 备份。
+在本项目中双击根目录 **Start.cmd** 启动已编译的 Windows 版（1.5.0）；所有题目、问答和计时保存在项目根目录 `data/orange-study.sqlite3`。如果只复制 `release/OrangeStudy-1.5.0`，双击其中的 Start.cmd，便携版会在自己的 `data` 目录保存题库。两种启动方式数据目录不同，迁移时可使用 JSON 备份。
 
 1. 启动默认进入**全部错题**；左侧可选择专业课、数学（一）、英语或政治。全部范围新增题目时默认科目仍为电子科技大学 839 专业课，可在编辑窗口调整。
 2. 点击“加入错题”，填写题目、难度、章节、来源，可追加解析、错因和历史问答。
@@ -52,9 +52,23 @@ Git 仓库提供源码、测试与构建脚本。个人题库、本机工具链�
 
 计时使用单调时钟，暂停不累计。倒计时结束发出提示音并停表，需点击结束保存。关闭窗口时会询问是否保存当前计时；进程被强制结束的未保存计时不能恢复。今日时长统计所有学科**已保存且在本地今日结束**的学习记录，跨日记录归入结束日。
 
+## GPT 图片录入（可选）
+
+1. 在错题本点击“GPT 图片录入”，再打开“API 设置”。填写自己的 API Key、模型名称和完整 Responses 接口地址，默认 `https://api.openai.com/v1/responses`、`gpt-4.1`。可配置支持同一协议、图片输入及严格 JSON Schema 输出的 HTTPS 接口；仅兼容 Chat Completions 的服务不能直接使用。HTTP 仅限本机回环地址，供开发测试。
+2. 默认密钥仅在本次运行内有效。Windows 可勾选“加密记住密钥”，使用系统 DPAPI 绑定当前 Windows 用户，密文存于 Qt 用户设置；可随时“清除密钥”。其他平台暂只支持本次运行的密钥，不明文持久保存。密钥不进入题库、备份、源码或日志。
+3. 选择、粘贴或拖入1至5张照片，支持旋转和鼠标拖选裁剪。填写科目、来源、题号、错因及补充要求；来源空值保存为“待标注”。未指定题号会分析所有可见题目，最后由用户选择哪些属于错题。
+4. 点击“发送图片并分析”才联网。仅发送处理后的所选图片、此次输入及章节候选标签，不发送其他题目、已有问答或整个题库。图片缩小至最长边2400像素并转为JPEG；原始路径和EXIF不随请求发送。使用 Responses API 的 `store:false`，这不等于服务商完全不保留请求数据，具体以服务商政策为准。
+5. 分析结果先作为内存草稿显示，公式沿用本地 LaTeX 渲染；可“编辑当前草稿”核对题干、答案、章节与错因。勾选要收录的题目并点击“将勾选题目加入错题本”，才以事务写入本地SQLite，自动刷新题库、章节索引及统计。编辑草稿不保存题库；关闭窗口会丢弃尚未保存的草稿。再次分析会替换当前未保存草稿。原图暂不保存到题库，JSON备份包含整理后的文本与LaTeX。
+
+数学章节只使用现有37项教材目录；其他科目只使用本地已有章节标签，未知时为“待标注”，不会凭空新增839大纲。错因保留用户输入，难度是AI建议值；无法确认的内容在笔记中标为“需要核对”。AI识别和解答需要人工核对。
+
+联网请求异步执行，可取消，失败不入库，不自动重试；取消会停止等待和阻止保存，但已发送请求仍可能计费。API按用量计费，需自己的有效密钥和可用额度。代理留空使用系统代理，也可设置 `http://127.0.0.1:12000` 等HTTP代理地址。默认HTTPS校验，不跟随重定向转发凭据。
+
+实现依据：[图片输入](https://developers.openai.com/api/docs/guides/images-vision)、[结构化输出](https://developers.openai.com/api/docs/guides/structured-outputs)、[GPT-4.1能力](https://developers.openai.com/api/docs/models/gpt-4.1)。本地模拟接口测试覆盖请求格式、返回校验、取消、认证错误、重定向、加密设置以及预览到显式入库的流程；真实服务测试需要用户提供密钥。
+
 ## 后续让我录入错题
 
-在这个项目中继续提问，并明确说“记录为错题”。我可整理题干、解析、问答和标签，通过配套 C++ CLI 写入同一题库；未明确要求记录时不录入。难度可以先给出建议，未知章节/来源保留“待标注”，不虚构来源。软件不会自动监听聊天，也没有内置在线 AI；其他聊天需要提供本项目位置和待录入内容。
+在这个项目中继续提问，并明确说“记录为错题”。我可整理题干、解析、问答和标签，通过配套 C++ CLI 写入同一题库；未明确要求记录时不录入。难度可以先给出建议，未知章节/来源保留“待标注”，不虚构来源。软件不会自动监听其他聊天；也可主动使用上述GPT图片录入。
 
 录入 JSON 格式见 `examples/question.json`（仅格式示例，不会自动加入真实题库）。建议为同一题目生成并保留 UUID，使重试导入不会重复。保存 UTF-8 JSON 后：
 
@@ -66,12 +80,12 @@ GUI 点击“刷新”即可看到命令行新增记录。
 
 ```powershell
 # 根目录 Start.cmd 与这些 CLI 命令共用 data。
-& '.\release\OrangeStudy-1.4.2\orange-cli.exe' --data-dir '.\data' list --subject professional --chapter '待标注' --difficulty 3
-& '.\release\OrangeStudy-1.4.2\orange-cli.exe' --data-dir '.\data' list --source '个人提问' --search '关键词'
-& '.\release\OrangeStudy-1.4.2\orange-cli.exe' --data-dir '.\data' show '<题目 UUID>'
-& '.\release\OrangeStudy-1.4.2\orange-cli.exe' --data-dir '.\data' history '<题目 UUID>'
-& '.\release\OrangeStudy-1.4.2\orange-cli.exe' --data-dir '.\data' export 'backup.json'
-& '.\release\OrangeStudy-1.4.2\orange-cli.exe' --data-dir '.\data' stats
+& '.\release\OrangeStudy-1.5.0\orange-cli.exe' --data-dir '.\data' list --subject professional --chapter '待标注' --difficulty 3
+& '.\release\OrangeStudy-1.5.0\orange-cli.exe' --data-dir '.\data' list --source '个人提问' --search '关键词'
+& '.\release\OrangeStudy-1.5.0\orange-cli.exe' --data-dir '.\data' show '<题目 UUID>'
+& '.\release\OrangeStudy-1.5.0\orange-cli.exe' --data-dir '.\data' history '<题目 UUID>'
+& '.\release\OrangeStudy-1.5.0\orange-cli.exe' --data-dir '.\data' export 'backup.json'
+& '.\release\OrangeStudy-1.5.0\orange-cli.exe' --data-dir '.\data' stats
 ```
 
 `update 文件.json` 接受含 `id` 的部分字段对象，例如 `{"id":"…","notes":"新的错因"}`。追加问答时先 show 读取原 conversation，再合并追加。可携带原 `updated_at` 防止覆盖并发编辑。CLI 所有输出为 UTF-8，错误时返回非零退出码。
@@ -96,7 +110,7 @@ ctest --test-dir build --output-on-failure
 ./build/orange-cli --data-dir ./data list
 ```
 
-Windows 打包默认输出到 `release/OrangeStudy-1.4.2`，也可用 `-PackageDir` 指定路径；根目录启动器使用上述默认路径。Windows 用 windeployqt 打包运行依赖；macOS 可用 macdeployqt，Linux 需安装对应 Qt 运行库及 SQLite 驱动。源代码面向 Windows/macOS/Linux；当前交付构建与运行验证在 Windows，其他平台尚未实机验证。
+Windows 打包默认输出到 `release/OrangeStudy-1.5.0`，也可用 `-PackageDir` 指定路径；根目录启动器使用上述默认路径。Windows 用 windeployqt 打包运行依赖；macOS 可用 macdeployqt，Linux 需安装对应 Qt 运行库及 SQLite 驱动。源代码面向 Windows/macOS/Linux；当前交付构建与运行验证在 Windows，其他平台尚未实机验证。
 
 没有传入 `--data-dir` 时，GUI 与 CLI 使用同一个 `QStandardPaths::AppDataLocation`，可在“关于 / 数据位置”确认路径。测试全部使用临时目录，不向真实题库写示例。
 

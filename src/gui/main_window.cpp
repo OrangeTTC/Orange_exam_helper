@@ -1,6 +1,7 @@
 // Copyright 2026 Orange. SPDX-License-Identifier: Apache-2.0
 #include "orange/main_window.hpp"
 #include "orange/analysis_page.hpp"
+#include "orange/ai_import_dialog.hpp"
 #include "orange/chapter_catalog.hpp"
 #include "orange/chapter_picker.hpp"
 #include "orange/math_browser.hpp"
@@ -181,13 +182,13 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
     connect(about, &QPushButton::clicked, this, [this] {
         QMessageBox::information(
             this, "Orange 考研助手",
-            "作者：Orange\n版本：1.4.2\n项目许可：Apache License 2.0\n\n"
+            "作者：Orange\n版本：1.5.0\n项目许可：Apache License 2.0\n\n"
             "考试配置：数学（一）、电子科技大学 "
             "839。\n数学目录按用户教材划分，其他学科章节自由填写。\n\n题库位置：\n" +
                 repository_.databasePath() +
                 "\n\n使用“导出备份”保存题目、编辑历史和学习计时。\n未来在本项目中明确要求记录错题，"
                 "可通过配套 CLI 录入。\n"
-                "本软件不自动读取其他聊天，也不内置在线 AI。\nQt 保留其原有许可证，详见 "
+                "GPT图片录入为可选功能，仅主动发送所选图片和说明；不自动读取其他聊天。\nQt 保留其原有许可证，详见 "
                 "THIRD_PARTY_NOTICES.md。");
     });
     ticker_ = new QTimer(this);
@@ -217,6 +218,17 @@ QWidget* MainWindow::libraryPage() {
     tools->addWidget(search_, 1);
     auto* add = button("+ 加入错题", "addQuestion");
     tools->addWidget(add);
+    auto* ai = button("GPT 图片录入", "aiImport");
+    tools->addWidget(ai);
+    connect(ai, &QPushButton::clicked, this, [this] {
+        AiImportDialog dialog(repository_, this);
+        if (!currentSubject_.isEmpty()) {
+            auto* subject = dialog.findChild<QComboBox*>("aiSubject");
+            subject->setCurrentIndex(subject->findData(currentSubject_));
+        }
+        connect(&dialog, &AiImportDialog::imported, this, [this] { reloadTags(); refresh(); });
+        dialog.exec();
+    });
     auto* import = button("导入");
     tools->addWidget(import);
     auto* exportButton = button("导出备份");
