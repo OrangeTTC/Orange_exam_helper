@@ -181,7 +181,7 @@ MainWindow::MainWindow(Repository& repository, QWidget* parent)
     connect(about, &QPushButton::clicked, this, [this] {
         QMessageBox::information(
             this, "Orange 考研助手",
-            "作者：Orange\n版本：1.4.1\n项目许可：Apache License 2.0\n\n"
+            "作者：Orange\n版本：1.4.2\n项目许可：Apache License 2.0\n\n"
             "考试配置：数学（一）、电子科技大学 "
             "839。\n数学目录按用户教材划分，其他学科章节自由填写。\n\n题库位置：\n" +
                 repository_.databasePath() +
@@ -367,7 +367,8 @@ QWidget* MainWindow::libraryPage() {
         guarded([this] { setQuestionStatus(selectedId(), "mastered"); });
     });
     connect(questions_, &QTableWidget::itemSelectionChanged, this, &MainWindow::showSelected);
-    connect(questions_, &QTableWidget::cellDoubleClicked, this, [this] { editQuestion(false); });
+    // 双击复用放大阅读按钮的入口，保持全屏、隐藏答案及关闭操作一致。
+    connect(questions_, &QTableWidget::cellDoubleClicked, read_, &QPushButton::click);
     for (auto* combo : {difficulty_, chapter_, source_, status_})
         connect(combo, &QComboBox::currentIndexChanged, this, &MainWindow::refresh);
     // 防抖输入，避免每个按键都刷新整个表格。
@@ -728,7 +729,7 @@ void MainWindow::refresh() {
             questions_->setCurrentCell(-1, -1);
         resultCount_->setText(
             rows.isEmpty() ? "暂无匹配题目。加入第一道错题，或清除筛选查看其他记录。"
-                           : QString("找到 %1 道题 · 点击查看详情，双击编辑").arg(rows.size()));
+                           : QString("找到 %1 道题 · 点击查看详情，双击放大阅读").arg(rows.size()));
         showSelected();
         Filter subject;
         subject.subject = currentSubject_;

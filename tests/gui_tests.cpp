@@ -360,11 +360,12 @@ class GuiTests : public QObject {
         const auto saved = repo.add(q);
         MainWindow window(repo);
         window.show();
-        // 每次重开都隐藏：覆盖按钮、主键盘回车、小键盘 Enter 和字号控件焦点。
+        // 每次重开都隐藏：覆盖按钮、双击题目、回车与字号控件焦点。
         for (int method = 0; method < 4; ++method) {
             QTimer::singleShot(50, &window, [&window, method] {
                 auto* dialog = window.findChild<QDialog*>("readingDialog");
                 QVERIFY(dialog);
+                QVERIFY(dialog->isFullScreen());
                 QTimer::singleShot(4000, dialog, &QDialog::reject);
                 auto* browser = dynamic_cast<MathBrowser*>(
                     dialog->findChild<QTextBrowser*>("readingContent"));
@@ -414,7 +415,15 @@ class GuiTests : public QObject {
                     QVERIFY(dialog->grab().save(screenshotDir + "/answer-revealed.png"));
                 QTest::mouseClick(close, Qt::LeftButton);
             });
-            QTest::mouseClick(window.findChild<QPushButton*>("readQuestion"), Qt::LeftButton);
+            if (method == 3) {
+                auto* rows = window.findChild<QTableWidget*>("questions");
+                QVERIFY(rows && rows->item(0, 0));
+                const auto point = rows->visualItemRect(rows->item(0, 0)).center();
+                QTest::mouseClick(rows->viewport(), Qt::LeftButton, Qt::NoModifier, point);
+                QTest::mouseDClick(rows->viewport(), Qt::LeftButton, Qt::NoModifier, point);
+            } else {
+                QTest::mouseClick(window.findChild<QPushButton*>("readQuestion"), Qt::LeftButton);
+            }
         }
         QCOMPARE(repo.find(saved.id)->answer, saved.answer);
         QCOMPARE(repo.find(saved.id)->conversation, saved.conversation);
